@@ -1,0 +1,5 @@
+https://raw.githubusercontent.com/jpatokal/openflights/master/data/countries.dat
+https://raw.githubusercontent.com/jpatokal/openflights/master/data/planes.dat
+https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat
+https://raw.githubusercontent.com/jpatokal/openflights/master/data/airlines.dat
+https://raw.githubusercontent.com/jpatokal/openflights/master/data/airports.dat

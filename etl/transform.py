@@ -39,6 +39,15 @@ def translate_country(c):
 
     return c if not c in ct else ct[c]
 
+def translate_plane(iata):
+    # Some plane iata codes in routes.dat don't match any
+    # in planes.dat. For these we'll use an approximation
+    pl = {
+        'DH8': 'DH1', # De Havilland Canada DHC-8-100 Dash 8 
+        'CRJ': 'CR1', # Canadair Regional Jet 100
+        'DC9': 'D91' # Douglas DC-9-10
+    }
+    return iata if not iata in pl else pl[iata]
 
 def convert_if_exists(v, t):
         return t(v) if v else None

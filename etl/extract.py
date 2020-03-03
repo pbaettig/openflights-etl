@@ -1,3 +1,4 @@
+import csv
 import re
 
 from lineparser import LineParser
@@ -95,6 +96,31 @@ def read_airlines(fname):
 
             yield AirlineDat(*v)
 
+def read_planes_csv(fname):
+    def _skip(r):
+        if r[0] == '' or r[0] == 'n/a':
+            return True
+        if r[2] == '' or r[2] == 'n/a':
+            return True
+
+        return False
+
+    def _sanitize(s):
+        if s == '' or s == 'n/a':
+            return None
+        return s
+
+
+    with open(fname) as f:
+        reader = csv.reader(f)
+        # discard header
+        _ = next(reader)
+        for r in reader:
+            if _skip(r):
+                continue
+            rs = [_sanitize(s) for s in r]
+            yield PlaneDat(rs[2],rs[0], rs[1]) 
+
 
 def read_planes(fname):
     lp = LineParser([
@@ -107,6 +133,17 @@ def read_planes(fname):
         for l in f:
             v = lp.parse(l)
             yield PlaneDat(*v)
+
+
+    # add some prominent missing planes here that came up during
+    # loading of route_plane
+    missing_planes_iata = {
+        'L4T': 'Let L 410 Turbojet',
+        '313': 'Airbus A310-300',
+        '32S': 'Airbus A318/319/320/321'
+    }
+    for iata,name in missing_planes_iata.items():
+        yield PlaneDat(name, iata, None)
 
 
 def read_routes(fname):
@@ -157,4 +194,3 @@ def read_routes(fname):
                 st,
                 eq
             )
-

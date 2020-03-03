@@ -73,7 +73,7 @@ class AirlineDat:
     country : str
     airline_active : str
 
-@dataclass
+@dataclass(frozen=True, eq=True)
 class PlaneDat:
     plane_name : str
     plane_iata : str

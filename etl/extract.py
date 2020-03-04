@@ -177,7 +177,7 @@ def read_routes(fname):
             src_ap_id = v[3]
             dest_ap_iata, dest_ap_icao = _airport_iata_icao(v[4])
             dest_ap_id = v[5]
-            cs = v[6]
+            cs = True if v[6] else False
             st = convert_if_exists(v[7], int)
             eq = v[8].split(' ') if v[8] else []
 

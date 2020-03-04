@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 from functools import partial
-from os.path import join, isdir
+from operator import attrgetter
+from os.path import isdir, join
+from traceback import print_exc
 
 from db import OpenflightsDB
-from extract import read_airlines, read_airports, read_countries, read_planes,read_planes_csv, read_routes
-from load import load_airlines, load_airports, load_cities, load_countries, load_planes, load_routes
-
-from traceback import print_exc
-import logging
+from extract import (read_airlines, read_airports, read_countries, read_planes,
+                     read_planes_csv, read_routes)
+from load import (load_airlines, load_airports, load_cities, load_countries,
+                  load_planes, load_routes)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,8 +29,9 @@ def parse_args():
     parser.add_argument('--db-name', default='openflights')
     parser.add_argument('--db-user', default='postgres')
     parser.add_argument('--db-password', default='1234')
-    parser.add_argument('--data-dir', default='../data/', type=dir_path)
+    parser.add_argument('--data-dir', default='./data/', type=dir_path)
     return parser.parse_args()
+
 
 def combine_planes(p1, p2):
     planes_all = set(p1) | set(p2)
@@ -42,10 +45,17 @@ def combine_planes(p1, p2):
         yield(p)
 
 
-def format_db_stats(t, s):
-    return f'Stats for table "{t}": {s.insert_ok} row(s) inserted, {s.insert_duplicate} duplicate(s), {s.insert_error} failed'
+def display_table_stats(t, s):
+    print(f'# Stats for {t}')
+    print(f'rows inserted: {s.insert_ok}')
 
-from operator import attrgetter
+    total_failed = sum(s.insert_errors.values())
+    print(f'rows failed: {total_failed}')
+    for ex, num in s.insert_errors.items():
+        print(f'  - {ex}: {num}')
+    print()
+
+
 def main(args):
     airlines = partial(read_airlines, join(args.data_dir, 'airlines.dat'))
     airports = partial(read_airports, join(args.data_dir, 'airports.dat'))
@@ -56,27 +66,27 @@ def main(args):
 
 
     load_countries(countries(), database)
-    logging.info(format_db_stats('countries', database._table_stats['countries']))
+    display_table_stats('countries', database.table_stats['countries'])
+
 
     load_cities(airports(), database)
-    logging.info(format_db_stats('cities', database._table_stats['cities']))
+    display_table_stats('cities', database.table_stats['cities'])
 
     load_airports(airports(), database)
-    logging.info(format_db_stats('airports', database._table_stats['airports']))
+    display_table_stats('airports', database.table_stats['airports'])
 
     load_airlines(airlines(), database)
-    logging.info(format_db_stats('airlines', database._table_stats['airlines']))
+    display_table_stats('airlines', database.table_stats['airlines'])
 
     load_planes(combine_planes(planes(), planes_csv()), database)
-    logging.info(format_db_stats('planes', database._table_stats['planes']))
+    display_table_stats('planes', database.table_stats['planes'])
 
     logging.basicConfig(level=logging.DEBUG)
 
     load_routes(routes(), database)
-    logging.info(format_db_stats('routes', database._table_stats['routes']))
-    logging.info(format_db_stats('route_plane', database._table_stats['route_plane']))
-
-
+    display_table_stats('routes', database.table_stats['routes'])
+    display_table_stats('route_plane', database.table_stats['route_plane'])
+  
 
 if __name__ == "__main__":
     args = parse_args()
@@ -96,5 +106,3 @@ if __name__ == "__main__":
         print_exc()
     finally:
         database.close()
-
-    

@@ -65,6 +65,7 @@ def load_planes(planes, db):
     
 
 def load_routes(routes, db):
+    # some_routes = (next(routes) for _ in range(10000))
 
     for r in routes:
         try:

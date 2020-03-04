@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from contextlib import contextmanager
-from dataclasses import asdict, astuple, dataclass
+from dataclasses import asdict, astuple, dataclass, field
 from pprint import pprint
 from traceback import print_exc
 
@@ -9,22 +9,24 @@ import psycopg2
 
 from model import PlaneDat
 from transform import translate_country, translate_plane
-
+from collections import defaultdict
+from functools import partial
 
 @dataclass
 class TableStats:
     insert_ok : int = 0
-    insert_error : int = 0
-    insert_duplicate : int = 0
+    insert_errors : dict = field(default_factory=partial(defaultdict, int))
 
     def add_ok(self, i=1):
         self.insert_ok += i
 
-    def add_error(self, i=1):
-        self.insert_error += i
-
-    def add_duplicate(self, i=1):
-        self.insert_duplicate += i
+    def add_error(self, ex):
+        n = type(ex).__name__
+        # if n in self.insert_errors:
+        #     self.insert_errors[n] += 1
+        # else:
+        #     self.insert_errors[n] = 1
+        self.insert_errors[n] += 1
 
 
 class OpenflightsDB:
@@ -48,7 +50,7 @@ class OpenflightsDB:
             'route_plane': 'route_id,plane_id'
         }
 
-        self._table_stats = defaultdict(TableStats)
+        self.table_stats = defaultdict(TableStats)
 
         self._plane_iata_cache = {}
         self._country_name_cache = {}
@@ -74,14 +76,14 @@ class OpenflightsDB:
         with self._conn.cursor() as cur:
             try:
                 cur.execute(q, values)
-            except psycopg2.errors.UniqueViolation:
-                self._table_stats[table].add_duplicate()
-                if update:
-                    raise NotImplementedError
-            except Exception:
-                self._table_stats[table].add_error()
+            # except psycopg2.errors.UniqueViolation as ex:
+            #     self.table_stats[table].add_error(ex)
+            #     if update:
+            #         raise NotImplementedError
+            except Exception as ex:
+                self.table_stats[table].add_error(ex)
             else:
-                self._table_stats[table].add_ok()
+                self.table_stats[table].add_ok()
                 return cur.fetchone()[0]
 
 
@@ -96,14 +98,16 @@ class OpenflightsDB:
         with self._conn.cursor() as cur:
             try:
                 cur.execute(q, tuple(value_dict.values()))
-            except psycopg2.errors.UniqueViolation:
-                self._table_stats[table].add_duplicate()
+            except psycopg2.errors.UniqueViolation as ex:
+                self.table_stats[table].add_error(ex)
                 if update:
                     raise NotImplementedError
-            except Exception:
-                self._table_stats[table].add_error()
+            # except psycopg2.errors.ForeignKeyViolation as ex:
+            #      self.table_stats[table].add_error(ex)
+            except Exception as ex:
+               self.table_stats[table].add_error(ex)
             else:
-                self._table_stats[table].add_ok()
+                self.table_stats[table].add_ok()
                 return cur.fetchone()[0]
 
 
@@ -202,13 +206,10 @@ class OpenflightsDB:
         with self._conn.cursor() as cur:
             try:
                 cur.execute(q, apdb)
-            except psycopg2.errors.UniqueViolation:
-                self._table_stats['airports'].add_duplicate()
-                return
-            except Exception:
-                self._table_stats['airports'].add_error()
+            except Exception as ex:
+                self.table_stats['airports'].add_error(ex)
             else:
-                self._table_stats['airports'].add_ok()
+                self.table_stats['airports'].add_ok()
                 return cur.fetchone()[0]
 
 
@@ -227,9 +228,12 @@ class OpenflightsDB:
         ]
         v = {k:v for k,v in asdict(route).items() if k in keep}
 
-
         route_id = self._insert_kv('routes',v)
-       
+        if not route_id:
+            logging.debug(f'Skip route      {v}')
+            return
+        if route_id:
+            logging.debug(f'inserted route {v}')
 
         for p in route.route_equipment_iata:
             p_id = self.get_plane_by_iata(translate_plane(p))
@@ -238,5 +242,5 @@ class OpenflightsDB:
                 # so that we can still insert the route
                 p_id = self.insert_plane(PlaneDat('DUMMY', p, None))
 
-
             self._insert('route_plane',(route_id, p_id))
+        return route_id

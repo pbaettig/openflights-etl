@@ -15,7 +15,7 @@ psql <schema/create.sql
 ```
 
 ## Load data
-1. extract the required .dat files from `data/data.tar.gz` or download them with `data/get.sh`
+1. extract the required .dat files from `data/data.tar.gz` or download them yourself from `data/sources.txt`
 2. place all *.dat files in a folder alongside with `data/planes.csv`
 3. install the python requirements 
 ```

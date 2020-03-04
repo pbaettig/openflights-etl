@@ -1,11 +1,30 @@
+import logging
+from collections import defaultdict
 from contextlib import contextmanager
-from dataclasses import asdict, astuple
+from dataclasses import asdict, astuple, dataclass
 from pprint import pprint
 from traceback import print_exc
 
 import psycopg2
 
+from model import PlaneDat
 from transform import translate_country, translate_plane
+
+
+@dataclass
+class TableStats:
+    insert_ok : int = 0
+    insert_error : int = 0
+    insert_duplicate : int = 0
+
+    def add_ok(self, i=1):
+        self.insert_ok += i
+
+    def add_error(self, i=1):
+        self.insert_error += i
+
+    def add_duplicate(self, i=1):
+        self.insert_duplicate += i
 
 
 class OpenflightsDB:
@@ -29,9 +48,12 @@ class OpenflightsDB:
             'route_plane': 'route_id,plane_id'
         }
 
+        self._table_stats = defaultdict(TableStats)
+
         self._plane_iata_cache = {}
         self._country_name_cache = {}
         self._city_name_cache = {}
+
 
     def __enter__(self):
         self._cur = self._conn.cursor()
@@ -53,9 +75,13 @@ class OpenflightsDB:
             try:
                 cur.execute(q, values)
             except psycopg2.errors.UniqueViolation:
+                self._table_stats[table].add_duplicate()
                 if update:
                     raise NotImplementedError
+            except Exception:
+                self._table_stats[table].add_error()
             else:
+                self._table_stats[table].add_ok()
                 return cur.fetchone()[0]
 
 
@@ -71,9 +97,13 @@ class OpenflightsDB:
             try:
                 cur.execute(q, tuple(value_dict.values()))
             except psycopg2.errors.UniqueViolation:
+                self._table_stats[table].add_duplicate()
                 if update:
                     raise NotImplementedError
+            except Exception:
+                self._table_stats[table].add_error()
             else:
+                self._table_stats[table].add_ok()
                 return cur.fetchone()[0]
 
 
@@ -89,7 +119,8 @@ class OpenflightsDB:
             cur.execute('SELECT plane_id FROM planes WHERE plane_iata = %s;', (n,))
             r = cur.fetchone()
             v = r[0] if r else None
-            self._plane_iata_cache[n] = v
+            if v:
+                self._plane_iata_cache[n] = v
             return v
 
 
@@ -101,7 +132,8 @@ class OpenflightsDB:
             cur.execute('SELECT country_id FROM countries WHERE country_name = %s;', (n,))
             r = cur.fetchone() 
             v = r[0] if r else None
-            self._country_name_cache[n] = v
+            if v:
+                self._country_name_cache[n] = v
             return v
 
 
@@ -113,13 +145,14 @@ class OpenflightsDB:
             cur.execute('SELECT city_id FROM cities WHERE city_name = %s;', (n,))
             r = cur.fetchone() 
             v = r[0] if r else None
-            self._city_name_cache[n] = v
+            if v:
+                self._city_name_cache[n] = v
             return v
 
 
     def insert_country(self, country):
         v = asdict(country)
-        self._insert_kv('countries', v)
+        return self._insert_kv('countries', v)
 
 
     def insert_city(self, city):
@@ -129,28 +162,28 @@ class OpenflightsDB:
        
         ci = self.get_country_by_name(cn)
         if not ci:
-            print(f'insert_city: no city ID found for "{cn}". Skipping.')
+            logging.debug(f'insert_city: no country ID found for "{cn}". Skipping.')
             return
 
         v['country_id'] = ci
-        self._insert_kv('cities', v)
+        return self._insert_kv('cities', v)
         
 
     def insert_airline(self, airline):
         v = asdict(airline)
         ci = self.get_country_by_name(v.pop('country'))
         if not ci:
-            print(f'insert_airline: no country ID found for "{airline.country}". Skipping.')
+            logging.debug(f'insert_airline: no country ID found for "{airline.country}". Skipping.')
             return
 
-        self._insert_kv('airlines', v)
+        return self._insert_kv('airlines', v)
                
 
     def insert_airport(self, airport):
         cn = airport.city
         ci = self.get_city_by_name(cn)
         if not ci:
-            print(f'insert_airport: no city ID found for "{cn}". Skipping.')
+            logging.debug(f'insert_airport: no city ID found for "{cn}". Skipping.')
             return
 
         apdb = (
@@ -164,18 +197,24 @@ class OpenflightsDB:
             airport.type,
             airport.source,
         )
-        q = 'INSERT INTO airports VALUES (%s,%s,%s,%s,%s,point(%s,%s),%s,%s,%s)'
+        q = 'INSERT INTO airports VALUES (%s,%s,%s,%s,%s,point(%s,%s),%s,%s,%s) RETURNING airport_id;'
         
         with self._conn.cursor() as cur:
             try:
                 cur.execute(q, apdb)
             except psycopg2.errors.UniqueViolation:
+                self._table_stats['airports'].add_duplicate()
                 return
+            except Exception:
+                self._table_stats['airports'].add_error()
+            else:
+                self._table_stats['airports'].add_ok()
+                return cur.fetchone()[0]
 
 
     def insert_plane(self, plane):
         v = asdict(plane)
-        self._insert_kv('planes', v)
+        return self._insert_kv('planes', v)
 
 
     def insert_route(self, route):
@@ -188,20 +227,16 @@ class OpenflightsDB:
         ]
         v = {k:v for k,v in asdict(route).items() if k in keep}
 
-        try:
-            route_id = self._insert_kv('routes',v)
-        except psycopg2.errors.ForeignKeyViolation:
-            print(f'insert_route: no src/dest airport found with ID {v["src_airport_id"]}/{v["dest_airport_id"]}. Skipping.')
-            return
 
-        
-        try:
-            for p in route.route_equipment_iata:
-                p_id = self.get_plane_by_iata(translate_plane(p))
-                if not p_id:
-                    print(f'insert_route: no plane_id found for {p}')
-                    return
+        route_id = self._insert_kv('routes',v)
+       
 
-                self._insert('route_plane',(route_id, p_id))
-        except:
-            print_exc()
+        for p in route.route_equipment_iata:
+            p_id = self.get_plane_by_iata(translate_plane(p))
+            if not p_id:
+                # if we don't know the plane insert a DUMMY plane 
+                # so that we can still insert the route
+                p_id = self.insert_plane(PlaneDat('DUMMY', p, None))
+
+
+            self._insert('route_plane',(route_id, p_id))

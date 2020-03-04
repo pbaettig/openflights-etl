@@ -96,6 +96,7 @@ def read_airlines(fname):
 
             yield AirlineDat(*v)
 
+
 def read_planes_csv(fname):
     def _skip(r):
         if r[0] == '' or r[0] == 'n/a':

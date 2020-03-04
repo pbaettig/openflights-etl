@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Iterable
 
-@dataclass
+@dataclass(frozen=True)
 class CityDat:
     city_id : int
     country_id : int
@@ -12,13 +12,13 @@ class CityDat:
     city_daylight_saving : str
     city_timezone : str
 
-@dataclass
+@dataclass(frozen=True)
 class CountryDat:
     country_name : str
     country_iso : str
     country_dafif : str
 
-@dataclass
+@dataclass(frozen=True)
 class AirportDat:
     airport_id : int
     airport_name : str
@@ -35,34 +35,8 @@ class AirportDat:
     type : str
     source : str
 
-    @staticmethod
-    def from_line(l):
-        m = AirportDat._line_re.match(l.strip())
-        if not m:
-            raise ValueError("line does not match expected format")
 
-        v = m.groups()
-
-        ai = int(v[0])
-        an = v[1]
-        cy = v[2]
-        ct = v[3]
-        iata = v[4]
-        icao = v[5]
-        lat = float(v[6])
-        lon = float(v[7])
-        alt = int(v[8])
-        tzo = float(v[9])
-        dst = v[10]
-        tzn = v[11]
-        tp = v[12]
-        src = v[13]
-
-
-        return AirportDat(ai, an, cy, ct, iata, icao, lat, lon, alt, tzo, dst, tzn, tp, src)
-
-
-@dataclass
+@dataclass(frozen=True)
 class AirlineDat:
     airline_id : int
     airline_name : str
@@ -73,13 +47,18 @@ class AirlineDat:
     country : str
     airline_active : str
 
-@dataclass(frozen=True, eq=True)
+
+@dataclass(frozen=True)
 class PlaneDat:
     plane_name : str
     plane_iata : str
     plane_icao : str
 
-@dataclass
+    def __eq__(self, other):
+        return self.plane_iata == other.plane_iata and self.plane_icao == other.plane_icao
+
+
+@dataclass(frozen=True)
 class RouteDat:
     airline_iata : str
     airline_icao : str

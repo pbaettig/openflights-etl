@@ -24,4 +24,4 @@ class LineParser:
                     raise NotImplementedError()
 
         return re.compile(','.join(_re_parts()))
-    #print(list(_fmt_tokens()))
+

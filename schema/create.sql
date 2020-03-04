@@ -6,7 +6,9 @@ CREATE TABLE countries (
     country_name    varchar(40) NOT NULL, 
     country_iso             char(2),
     country_dafif           char(2),
-    CONSTRAINT unq_country UNIQUE(country_iso,country_dafif),
+    CONSTRAINT unq_country_name UNIQUE(country_name),
+    CONSTRAINT unq_country_iso UNIQUE(country_iso),
+    CONSTRAINT unq_country_dafif UNIQUE(country_dafif),
     PRIMARY KEY (country_id)
 );
 CREATE TABLE planes (
@@ -14,7 +16,8 @@ CREATE TABLE planes (
     plane_name        varchar(80) NOT NULL, 
     plane_iata        char(3),
     plane_icao        char(4),
-    CONSTRAINT unq_plane UNIQUE(plane_iata,plane_icao),
+    CONSTRAINT unq_plane_iata UNIQUE(plane_iata),
+    CONSTRAINT unq_plane_icao UNIQUE(plane_icao),
     PRIMARY KEY (plane_id)
 );
 

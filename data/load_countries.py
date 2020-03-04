@@ -1,5 +1,5 @@
 import psycopg2 as pg
-
+import logging
 import re
 
 unq_re = re.compile(r'^"([^"]+)"$')
@@ -27,4 +27,4 @@ if __name__ == "__main__":
             if None in values:
                 continue
 
-            print("INSERT INTO countries (country_name,iso,dafif) VALUES ('{}','{}','{}');".format(*values))
+            logging.debug("INSERT INTO countries (country_name,iso,dafif) VALUES ('{}','{}','{}');".format(*values))

@@ -34,7 +34,8 @@ def translate_country(c):
         'Somali Republic': 'Somalia',
         'Hong Kong SAR of China': 'Hong Kong',
         'Lao Peoples Democratic Republic': 'Laos',
-        'Russia]]': 'Russia'
+        'Russia]]': 'Russia',
+        'Syrian Arab Republic': 'Syria'
     }
 
     return c if not c in ct else ct[c]

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 from functools import partial
 from os.path import join, isdir
@@ -7,6 +9,10 @@ from extract import read_airlines, read_airports, read_countries, read_planes,re
 from load import load_airlines, load_airports, load_cities, load_countries, load_planes, load_routes
 
 from traceback import print_exc
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 
 def parse_args():
     def dir_path(d):
@@ -35,6 +41,11 @@ def combine_planes(p1, p2):
         inserted.add(iata_icao)
         yield(p)
 
+
+def format_db_stats(t, s):
+    return f'Stats for table "{t}": {s.insert_ok} row(s) inserted, {s.insert_duplicate} duplicate(s), {s.insert_error} failed'
+
+from operator import attrgetter
 def main(args):
     airlines = partial(read_airlines, join(args.data_dir, 'airlines.dat'))
     airports = partial(read_airports, join(args.data_dir, 'airports.dat'))
@@ -43,12 +54,28 @@ def main(args):
     planes_csv = partial(read_planes_csv, join(args.data_dir, 'planes.csv'))
     routes = partial(read_routes, join(args.data_dir, 'routes.dat'))
 
+
     load_countries(countries(), database)
+    logging.info(format_db_stats('countries', database._table_stats['countries']))
+
     load_cities(airports(), database)
+    logging.info(format_db_stats('cities', database._table_stats['cities']))
+
     load_airports(airports(), database)
+    logging.info(format_db_stats('airports', database._table_stats['airports']))
+
     load_airlines(airlines(), database)
+    logging.info(format_db_stats('airlines', database._table_stats['airlines']))
+
     load_planes(combine_planes(planes(), planes_csv()), database)
+    logging.info(format_db_stats('planes', database._table_stats['planes']))
+
+    logging.basicConfig(level=logging.DEBUG)
+
     load_routes(routes(), database)
+    logging.info(format_db_stats('routes', database._table_stats['routes']))
+    logging.info(format_db_stats('route_plane', database._table_stats['route_plane']))
+
 
 
 if __name__ == "__main__":
@@ -64,7 +91,7 @@ if __name__ == "__main__":
     try:
         main(args)
     except KeyboardInterrupt:
-        print('Ctrl-C. Bye.')
+        logging.debug('Ctrl-C. Bye.')
     except:
         print_exc()
     finally:
